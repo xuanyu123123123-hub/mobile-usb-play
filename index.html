@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mobile USB Play v0.1</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, "Malgun Gothic", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #edf3ff; background: #090f1b; }
+    button, select { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, select:focus-visible { outline: 2px solid #81c5ff; outline-offset: 3px; }
+    .wrap { max-width: 1160px; margin: auto; padding: 22px; }
+    .top { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 22px; }
+    .brand { font-size: 23px; font-weight: 850; letter-spacing: -.6px; }
+    .brand span { color: #67b4ff; }
+    .tag { color: #a9bed8; font-size: 12px; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(275px, 1fr); gap: 18px; }
+    .card { padding: 20px; border: 1px solid #283751; border-radius: 20px; background: #131e30; }
+    h1 { margin: 0; font-size: 25px; }
+    h2 { margin: 0 0 13px; font-size: 17px; }
+    p { color: #b9c9df; line-height: 1.6; }
+    .lead { margin: 7px 0 18px; font-size: 13px; }
+    .screen { padding: 13px; background: #050b14; border: 1px solid #27344b; border-radius: 14px; }
+    .pitch { aspect-ratio: 16 / 9; position: relative; overflow: hidden; border-radius: 9px;
+      background: repeating-linear-gradient(90deg,#16523f 0%,#16523f 12.5%,#1c634b 12.5%,#1c634b 25%); }
+    .pitch::before { content: ""; position: absolute; inset: 6%; border: 2px solid #b9e4c7aa; pointer-events: none; }
+    .centerline { position: absolute; top: 6%; bottom: 6%; left: 50%; border-left: 2px solid #b9e4c7aa; }
+    .circle { position: absolute; left: 50%; top: 50%; width: 21%; aspect-ratio: 1; border: 2px solid #b9e4c7aa; border-radius: 50%; transform: translate(-50%,-50%); }
+    .goal { position: absolute; top: 35%; bottom: 35%; width: 12%; border: 2px solid #b9e4c7aa; }
+    .goal.left { left: 6%; } .goal.right { right: 6%; }
+    .player { position: absolute; left: 43%; top: 50%; width: 4.7%; aspect-ratio: 1; border-radius: 100%; border: 3px solid white;
+      background: #3389ff; box-shadow: 0 0 0 5px #66b9ff50; transform: translate(-50%,-50%); transition: left .045s linear,top .045s linear; }
+    .ball { position: absolute; left: 47%; top: 50%; width: 2.5%; aspect-ratio: 1; border-radius: 50%; background: white; border: 2px solid #111827;
+      transform: translate(-50%,-50%); }
+    .hint { position: absolute; top: 11px; left: 11px; padding: 6px 9px; background: #061120c9; border-radius: 7px; font-size: 11px; }
+    .mode { position: absolute; bottom: 10px; right: 10px; padding: 6px 9px; background: #061120c9; border-radius: 6px; font-size: 11px; }
+    .controls { display: flex; gap: 9px; flex-wrap: wrap; margin-top: 12px; }
+    .btn { border: none; border-radius: 10px; padding: 11px 15px; background: #2b3b53; color: white; font-weight: 700; }
+    .btn.primary { background: #2c82eb; }
+    .btn.danger { background: #553044; }
+    .btn:hover { filter: brightness(1.12); }
+    .info { margin: 12px 0 0; font-size: 12px; color: #c0d2e9; }
+    .notice { margin-top: 14px; padding: 12px; color: #c7d9ef; background: #203049; border-radius: 10px; font-size: 12px; line-height: 1.6; }
+    .right { display: flex; flex-direction: column; gap: 18px; }
+    .stat { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid #283751; font-size: 13px; }
+    .stat:last-child { border: none; }
+    .ok { color: #8ee5b5; } .bad { color: #ffb6a9; }
+    label.field { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 14px 0; font-size: 13px; }
+    select { min-width: 105px; background: #23354d; border: 1px solid #3b506c; border-radius: 8px; color: white; padding: 8px; }
+    .maps { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
+    .map { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 9px; border: 1px solid #35465d; border-radius: 9px; font-size: 12px; }
+    .key { min-width: 48px; border: 1px solid #6984a8; border-radius: 6px; padding: 7px 4px; color: #d4e7ff; background: #1c2c43; font-size: 12px; }
+    .key.waiting { background: #2378dc; color: white; }
+    .small { font-size: 12px; color: #abbdd3; line-height: 1.7; }
+    .log { font-size: 12px; min-height: 43px; padding: 10px; border-radius: 8px; color: #9cdaff; background: #0d1626; }
+    footer { margin: 22px 0 0; font-size: 12px; color: #93a5bf; line-height: 1.6; }
+    @media (max-width: 810px) { .layout { grid-template-columns: 1fr; } .wrap { padding: 12px; } h1 { font-size: 21px; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">🎮 MOBILE <span>USB PLAY</span></div>
+      <span class="tag">v0.1 · 브라우저 테스트 버전</span>
+    </header>
+    <div class="layout">
+      <main class="card">
+        <h1>FC 모바일 PC 플레이 준비</h1>
+        <p class="lead">휴대폰이 없어도 데모 화면과 키 배치를 테스트할 수 있어.</p>
+        <section class="screen">
+          <div class="pitch" id="pitch" tabindex="0" aria-label="키보드 조작 데모 화면">
+            <div class="centerline"></div><div class="circle"></div>
+            <div class="goal left"></div><div class="goal right"></div>
+            <div id="player" class="player"></div><div id="ball" class="ball"></div>
+            <div class="hint">연습용 데모 · 실제 게임 화면 아님</div>
+            <div class="mode" id="mode">데모 정지</div>
+          </div>
+        </section>
+        <div class="controls">
+          <button class="btn primary" id="demo">▶ 데모 시작</button>
+          <button class="btn" id="usb">🔌 USB 기기 선택</button>
+          <button class="btn" id="engine">실제 미러링 엔진 열기 ↗</button>
+        </div>
+        <div class="notice" id="message" role="status">데모를 시작한 뒤 화면을 클릭하면 키보드로 파란 선수를 움직일 수 있어.</div>
+        <p class="small">USB 기기 선택은 접근 권한과 기기 이름만 확인해. 여기서는 아직 ADB 인증·영상 전송·실제 스마트폰 조작을 하지 않아.</p>
+        <h2 style="margin-top:23px">최근 동작</h2>
+        <div class="log" id="action">아직 입력이 없어.</div>
+      </main>
+      <aside class="right">
+        <section class="card">
+          <h2>브라우저 연결 진단</h2>
+          <div class="stat"><span>보안 연결 (HTTPS/localhost)</span><strong id="secure">확인 중</strong></div>
+          <div class="stat"><span>WebUSB</span><strong id="support">확인 중</strong></div>
+          <div class="stat"><span>WebCodecs</span><strong id="codec">확인 중</strong></div>
+          <div class="stat"><span>선택된 USB 기기</span><strong id="device">없음</strong></div>
+          <p class="small">Chrome 또는 Edge에서 HTTPS 주소로 접속하면 가장 호환성이 좋아.</p>
+        </section>
+        <section class="card">
+          <h2>화면 설정 (저장됨)</h2>
+          <label class="field">해상도
+            <select id="resolution"><option value="720">720p</option><option value="1080">1080p</option></select>
+          </label>
+          <label class="field">목표 FPS
+            <select id="fps"><option value="30">30 FPS</option><option value="60">60 FPS</option></select>
+          </label>
+          <p class="small">지금은 선호도만 저장해. 실제 스트리밍 품질에 적용하려면 미러링 엔진과 연결해야 해.</p>
+        </section>
+        <section class="card">
+          <h2>키보드 설정</h2>
+          <div class="maps" id="maps"></div>
+          <p class="small">키 버튼을 누른 뒤 원하는 키를 입력해. 설정은 이 브라우저에 자동 저장돼.</p>
+          <div class="controls">
+            <button class="btn" id="reset">기본값 복구</button>
+            <button class="btn" id="export">설정 내보내기</button>
+            <button class="btn" id="import">설정 가져오기</button>
+            <input type="file" id="file" accept="application/json,.json" hidden />
+          </div>
+        </section>
+      </aside>
+    </div>
+    <footer>
+      Mobile USB Play v0.1 · 데모 및 연결 점검용 · 실제 화면 미러링은 OpenDroid Remote 엔진 사용 · 사용자의 USB 권한 없이는 기기에 접근하지 않음.
+    </footer>
+  </div>
+  <script>
+    'use strict';
+    const $ = id => document.getElementById(id);
+    const storageKey = 'mobile-usb-play-v01';
+    const defaults = {
+      resolution: '720', fps: '60',
+      keys: {up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD',pass:'KeyJ',shot:'KeyK',through:'KeyL',sprint:'ShiftLeft'}
+    };
+    const labels = {up:'위로',down:'아래로',left:'왼쪽',right:'오른쪽',pass:'패스',shot:'슛',through:'스루패스',sprint:'달리기'};
+    const clone = obj => JSON.parse(JSON.stringify(obj));
+    let settings = clone(defaults);
+    try {
+      const old = JSON.parse(localStorage.getItem(storageKey));
+      if (old && typeof old === 'object') {
+        settings.resolution = ['720','1080'].includes(old.resolution) ? old.resolution : '720';
+        settings.fps = ['30','60'].includes(old.fps) ? old.fps : '60';
+        for (const name of Object.keys(labels)) {
+          if (typeof old.keys?.[name] === 'string' && /^([A-Za-z0-9]+)$/.test(old.keys[name])) settings.keys[name] = old.keys[name];
+        }
+      }
+    } catch (_) { /* 저장된 설정이 손상됐으면 기본값 사용 */ }
+    function save() {
+      try { localStorage.setItem(storageKey, JSON.stringify(settings)); }
+      catch (_) { announce('브라우저 저장 공간에 접근할 수 없어 설정이 유지되지 않을 수 있어.'); }
+    }
+    function announce(msg) { $('message').textContent = msg; }
+    function log(msg) { $('action').textContent = new Date().toLocaleTimeString('ko-KR') + ' · ' + msg; }
+    function pretty(code) { return code.replace(/^Key/,'').replace(/^Digit/,'').replace('Arrow','').replace('ShiftLeft','Shift').replace('Space','Space'); }
+    let awaiting = null;
+    function drawKeys() {
+      $('maps').replaceChildren();
+      for (const [name,label] of Object.entries(labels)) {
+        const cell = document.createElement('div'); cell.className = 'map';
+        const title = document.createElement('span'); title.textContent = label;
+        const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'key';
+        btn.textContent = awaiting === name ? '입력…' : pretty(settings.keys[name]);
+        if (awaiting === name) btn.classList.add('waiting');
+        btn.onclick = () => { awaiting = name; drawKeys(); announce(label+'에 지정할 키를 누르세요. Esc를 누르면 취소돼.'); };
+        cell.append(title, btn); $('maps').append(cell);
+      }
+    }
+    $('resolution').value = settings.resolution;
+    $('fps').value = settings.fps;
+    $('resolution').onchange = e => { settings.resolution = e.target.value; save(); log('해상도 선호도 저장: '+settings.resolution+'p'); };
+    $('fps').onchange = e => { settings.fps = e.target.value; save(); log('FPS 선호도 저장: '+settings.fps); };
+    $('reset').onclick = () => { settings = clone(defaults); awaiting = null; $('resolution').value=settings.resolution; $('fps').value=settings.fps; drawKeys(); save(); announce('기본 키 설정으로 복구했어.'); };
+    $('export').onclick = () => {
+      const blob = new Blob([JSON.stringify(settings,null,2)],{type:'application/json'});
+      const url = URL.createObjectURL(blob); const a = document.createElement('a');
+      a.href=url; a.download='mobile-usb-play-settings.json'; a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    };
+    $('import').onclick = () => $('file').click();
+    $('file').onchange = async event => {
+      const file=event.target.files?.[0]; if(!file) return;
+      try {
+        if(file.size>20000) throw new Error('파일 크기가 너무 커.');
+        const value=JSON.parse(await file.text());
+        if(!value || !value.keys || !['720','1080'].includes(value.resolution) || !['30','60'].includes(value.fps)) throw new Error('설정 파일 형식이 맞지 않아.');
+        for(const name of Object.keys(labels)) {
+          if(typeof value.keys[name]!=='string' || !/^[A-Za-z0-9]+$/.test(value.keys[name])) throw new Error('키 설정이 올바르지 않아.');
+        }
+        settings={resolution:value.resolution,fps:value.fps,keys:Object.fromEntries(Object.keys(labels).map(name=>[name,value.keys[name]]))};
+        $('resolution').value=settings.resolution; $('fps').value=settings.fps; save(); drawKeys(); announce('설정 파일을 불러왔어.');
+      } catch(err) { announce('가져오기 실패: '+err.message); }
+      event.target.value='';
+    };
+    function checkFeatures() {
+      const features=[['secure',window.isSecureContext],['support',!!navigator.usb],['codec',!!window.VideoDecoder]];
+      features.forEach(([id,okay])=>{ $(id).textContent=okay?'사용 가능':'지원 안 됨'; $(id).className=okay?'ok':'bad'; });
+    }
+    let usbDevice=null;
+    $('usb').onclick = async () => {
+      if (!navigator.usb) { announce('WebUSB 미지원 브라우저야. PC Chrome 또는 Edge의 HTTPS 페이지를 사용해.'); return; }
+      try {
+        const device=await navigator.usb.requestDevice({filters:[{classCode:0xff,subclassCode:0x42,protocolCode:0x01}]});
+        usbDevice=device;
+        $('device').textContent=device.productName || '안드로이드 기기';
+        announce('USB 기기 선택 권한을 받았어. ADB 연결이나 게임 화면 전송은 아직 시작하지 않았어.');
+        log('기기 선택: '+(device.productName||'이름 없음'));
+      } catch(err) {
+        announce(err.name==='NotFoundError' ? '기기 선택을 취소했거나 연결 가능한 기기가 없어.' : 'USB 접근 실패: '+err.message);
+      }
+    };
+    if(navigator.usb) navigator.usb.addEventListener('disconnect',e=>{
+      if(usbDevice && e.device===usbDevice){usbDevice=null;$('device').textContent='없음';announce('USB 연결이 끊어졌어.');}
+    });
+    $('engine').onclick = () => window.open('https://hihumanzone.github.io/opendroid_remote/','_blank','noopener,noreferrer');
+    const active = new Set();
+    let playing=false, x=43, y=50, lastTime=0;
+    function setGame(yes) {
+      playing=yes; active.clear(); $('demo').textContent=playing?'■ 데모 정지':'▶ 데모 시작';
+      $('mode').textContent=playing?'키보드 조작 데모':'데모 정지';
+      announce(playing?'게임 화면을 한번 클릭하고 이동 키를 눌러봐. 패스/슛 버튼도 시험할 수 있어.':'데모를 정지했어.');
+      if (yes) { $('pitch').focus(); lastTime=performance.now(); requestAnimationFrame(frame); }
+    }
+    $('demo').onclick=()=>setGame(!playing);
+    function frame(now) {
+      if(!playing) return;
+      const dt=Math.min((now-lastTime)/1000,.05); lastTime=now;
+      let dx=Number(active.has(settings.keys.right))-Number(active.has(settings.keys.left));
+      let dy=Number(active.has(settings.keys.down))-Number(active.has(settings.keys.up));
+      const mag=Math.hypot(dx,dy)||1, speed=active.has(settings.keys.sprint)?39:22;
+      x=Math.max(9,Math.min(91,x+dx/mag*speed*dt));
+      y=Math.max(9,Math.min(91,y+dy/mag*speed*dt));
+      $('player').style.left=x+'%'; $('player').style.top=y+'%';
+      $('ball').style.left=Math.min(95,x+4)+'%'; $('ball').style.top=y+'%';
+      requestAnimationFrame(frame);
+    }
+    window.addEventListener('keydown',event=>{
+      if(awaiting){
+        event.preventDefault();
+        if(event.code!=='Escape'){
+          const other=Object.keys(settings.keys).find(k=>k!==awaiting && settings.keys[k]===event.code);
+          if(other) { announce('이미 '+labels[other]+'에 지정된 키야. 다른 키를 선택해.'); return; }
+          settings.keys[awaiting]=event.code; save(); log(labels[awaiting]+' 키 변경');
+        }
+        awaiting=null; drawKeys(); return;
+      }
+      if(!playing || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName)) return;
+      const action=Object.keys(settings.keys).find(name=>settings.keys[name]===event.code);
+      if(!action) return;
+      event.preventDefault();
+      active.add(event.code);
+      if(!event.repeat && ['pass','shot','through'].includes(action)) log('데모 동작: '+labels[action]);
+    });
+    window.addEventListener('keyup',e=>active.delete(e.code));
+    window.addEventListener('blur',()=>active.clear());
+    drawKeys(); checkFeatures();
+  </script>
+</body>
+</html>
