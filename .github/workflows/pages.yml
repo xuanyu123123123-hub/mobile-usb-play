@@ -1,4 +1,4 @@
-name: Deploy Mobile USB Play with Android mirroring
+name: Mobile USB Play v1.0 - Full Android USB Player
 
 on:
   push:
@@ -18,10 +18,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Mobile USB Play
+      - name: Checkout website repository
         uses: actions/checkout@v4
 
-      - name: Checkout Android mirroring engine
+      - name: Checkout tested Android mirroring engine (pinned revision)
         uses: actions/checkout@v4
         with:
           repository: hihumanzone/opendroid_remote
@@ -29,12 +29,12 @@ jobs:
           path: upstream
           persist-credentials: false
 
-      - name: Set up Node.js
+      - name: Set up Node.js 24
         uses: actions/setup-node@v4
         with:
           node-version: '24'
 
-      - name: Install dependencies and build engine
+      - name: Install, test and compile browser engine
         working-directory: upstream
         run: |
           npm install
@@ -42,30 +42,102 @@ jobs:
           npm run typecheck
           npm run build
 
-      - name: Assemble site
+      - name: Assemble complete v1.0 at site root
         run: |
           mkdir -p _site/engine
-          cp -a upstream/dist-static/. _site/engine/
-          cp upstream/LICENSE _site/engine/LICENSE
-          cp upstream/THIRD_PARTY_NOTICES.md _site/engine/THIRD_PARTY_NOTICES.md
-          cp index.html _site/index.html
+          cp -a upstream/dist-static/. _site/
+          cp upstream/LICENSE _site/OPEN_DROID_LICENSE.txt
+          cp upstream/THIRD_PARTY_NOTICES.md _site/THIRD_PARTY_NOTICES.md
           python3 - <<'PY'
           from pathlib import Path
-          f = Path('_site/index.html')
-          html = f.read_text(encoding='utf-8')
-          old = 'https://hihumanzone.github.io/opendroid_remote/'
-          if old not in html:
-              raise RuntimeError('Cannot locate the original engine link')
-          html = html.replace(old, './engine/')
-          html = html.replace('Mobile USB Play v0.1', 'Mobile USB Play v0.2')
-          f.write_text(html, encoding='utf-8')
-          assert Path('_site/engine/index.html').exists(), 'Engine build missing index.html'
+
+          root = Path('_site')
+          html_path = root / 'index.html'
+          if not html_path.is_file():
+              raise RuntimeError('OpenDroid static build did not produce index.html')
+          html = html_path.read_text(encoding='utf-8')
+          title_old = '<title>OpenDroid Remote</title>'
+          if title_old not in html:
+              raise RuntimeError('Unexpected upstream HTML template: title not found')
+          html = html.replace(title_old, '<title>Mobile USB Play v1.0 | Android USB 플레이</title>', 1)
+          tag = '<script defer src="./mobile-usb-guide.js"></script>'
+          if '</body>' not in html:
+              raise RuntimeError('Unexpected upstream HTML template: body not found')
+          html = html.replace('</body>', tag + '\n  </body>', 1)
+          html_path.write_text(html, encoding='utf-8')
+
+          # Keep previously shared /engine/ URL working while showing one unified app.
+          (root / 'engine' / 'index.html').write_text(
+              '<!doctype html><html lang="ko"><meta charset="utf-8">'
+              '<meta http-equiv="refresh" content="0;url=../">'
+              '<title>Mobile USB Play</title><a href="../">통합 플레이어 열기</a></html>',
+              encoding='utf-8',
+          )
+
+          guide_js = r'''(() => {
+            const start = () => {
+              if (document.getElementById('mup-guide-button')) return;
+              const style = document.createElement('style');
+              style.textContent = `
+                #mup-guide-button { position:fixed;right:16px;bottom:16px;z-index:2147483000;
+                  background:#2563eb;border:1px solid #93c5fd;color:white;padding:10px 15px;
+                  border-radius:12px;font:700 13px system-ui,sans-serif;box-shadow:0 4px 16px #0007;cursor:pointer }
+                #mup-guide-panel { position:fixed;right:16px;bottom:66px;z-index:2147483000;
+                  width:min(380px,calc(100vw - 32px));max-height:min(70vh,570px);overflow:auto;
+                  background:#0f1c2f;color:#eff6ff;border:1px solid #57749b;border-radius:16px;
+                  padding:17px;box-shadow:0 8px 28px #000b;font:13px/1.7 system-ui,sans-serif }
+                #mup-guide-panel[hidden] {display:none}
+                #mup-guide-panel h2 {font:700 19px system-ui,sans-serif;margin:0 0 8px}
+                #mup-guide-panel ol {padding-left:20px;margin:10px 0}
+                #mup-guide-panel li {margin:5px 0}
+                #mup-guide-panel p {margin:8px 0;color:#c1d8f6}
+                #mup-guide-close {float:right;color:#fff;background:#2e4463;border:0;border-radius:7px;padding:4px 9px;cursor:pointer}
+                #mup-guide-panel a {color:#93c5fd}
+              `;
+              document.head.appendChild(style);
+              const btn = document.createElement('button');
+              btn.id = 'mup-guide-button';btn.type='button';btn.textContent='한국어 사용 안내';
+              btn.setAttribute('aria-expanded','false');
+              const panel = document.createElement('section');
+              panel.id = 'mup-guide-panel';panel.hidden=true;
+              panel.setAttribute('aria-label','Mobile USB Play 한국어 사용 안내');
+              panel.innerHTML = `
+                <button id="mup-guide-close" type="button" aria-label="안내 닫기">닫기</button>
+                <h2>Mobile USB Play v1.0</h2>
+                <p>설치형 PC 앱 없이, 내 안드로이드폰을 USB로 연결하는 브라우저 플레이어야.</p>
+                <ol>
+                  <li>PC에서 Chrome 또는 Edge 사용</li>
+                  <li>안드로이드 개발자 옵션에서 USB 디버깅 켜기</li>
+                  <li>데이터 케이블 연결 후 <b>Connect USB</b> 선택</li>
+                  <li>휴대폰에서 USB 디버깅 허용</li>
+                  <li>화면이 보이면 <b>Mappings → Edit</b>에서 키와 버튼 위치 지정</li>
+                  <li><b>Play</b>로 조작하고 <b>Profiles → Save current mappings</b>로 저장</li>
+                </ol>
+                <p>화질과 FPS는 <b>Stream</b> 메뉴에서 설정해. 설정은 이 브라우저에 로컬로 저장돼. 다른 PC로 옮기려면 <b>Profiles → Export JSON</b>을 이용해.</p>
+                <p><b>주의:</b> FC 모바일 호환성은 아직 실제 기기로 검증되지 않았어. 기기가 보이지 않으면 USB 드라이버나 디버깅 권한을 확인해. 신뢰하는 PC에서만 USB 디버깅을 허용해.</p>
+                <p><a href="./OPEN_DROID_LICENSE.txt" target="_blank" rel="noopener noreferrer">오픈소스 라이선스</a></p>
+              `;
+              document.body.append(btn,panel);
+              const setOpen = open => { panel.hidden=!open;btn.setAttribute('aria-expanded',String(open)); };
+              btn.addEventListener('click',()=>setOpen(panel.hidden));
+              panel.querySelector('#mup-guide-close').addEventListener('click',()=>setOpen(false));
+              document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!panel.hidden)setOpen(false)});
+            };
+            if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});
+            else start();
+          })();
+          '''
+          (root / 'mobile-usb-guide.js').write_text(guide_js, encoding='utf-8')
+
+          # Safety: the bundled scrcpy server and relative assets must survive the copy.
+          if not (root / 'vendor' / 'scrcpy-server-v3.3.3').exists():
+              raise RuntimeError('Required scrcpy server missing from deploy artifact')
           PY
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload website
+      - name: Upload full website
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
@@ -77,6 +149,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy to Pages
+      - name: Publish to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
