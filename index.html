@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Mobile USB Play v0.3</title>
+  <title>Mobile USB Play v0.4</title>
   <style>
     :root { color-scheme: dark; font-family: system-ui, "Malgun Gothic", sans-serif; }
     * { box-sizing: border-box; }
@@ -78,7 +78,7 @@
   <div class="wrap">
     <header class="top">
       <div class="brand">🎮 MOBILE <span>USB PLAY</span></div>
-      <span class="tag">v0.3 · FC 조작 프로필 편집기</span>
+      <span class="tag">v0.4 · 원클릭 프로필 연결</span>
     </header>
     <div class="layout">
       <main class="card">
@@ -108,10 +108,12 @@
           <p class="fc-help">아래 버튼의 가상 터치 위치를 수정할 수 있어. 축구장 위의 동그라미를 드래그하거나 좌표를 바꾸면 돼. <strong>실제 FC 모바일 버튼 위치는 연결 후 확인해야 해.</strong> 기존 오른쪽의 키보드 설정이 이 프로필에 반영돼.</p>
           <div class="fc-list" id="fc-list"></div>
           <div class="controls">
-            <button class="btn primary" id="fc-download">⬇ OpenDroid용 FC 프로필 JSON 다운로드</button>
+            <button class="btn primary" id="fc-install">✅ 내 미러링 엔진에 프로필 저장하고 열기</button>
+            <button class="btn" id="fc-download">⬇ 수동 가져오기용 JSON 다운로드</button>
             <button class="btn" id="fc-reset">조작 위치 초기화</button>
           </div>
-          <div class="fc-legend">내보낸 JSON은 화면 조작을 자동 실행하지 않아. /engine/ → Profiles → Import JSON에서 가져온 뒤 Play 모드에서 직접 사용해.</div>
+          <div class="fc-legend"><strong>새 기능:</strong> 프로필 저장하고 열기를 누르면 같은 사이트의 미러링 엔진에 이 프로필을 등록해. 엔진에서 <strong>Profiles</strong> 탭으로 이동해 <strong>FC 모바일 시작용</strong> 프로필을 선택하고 Play 모드를 켜면 돼. 위치는 실기기 화면을 보면서 다시 맞춰야 해. <span style="color:#b6e1fa">같은 브라우저·같은 사이트 주소에서만 저장 상태가 공유돼.</span></div>
+          <p id="fc-install-status" class="fc-help" role="status">설정 준비 완료 · 아직 실제 게임 입력을 테스트하지 않았어.</p>
         </div>
       </main>
       <aside class="right">
@@ -147,7 +149,7 @@
       </aside>
     </div>
     <footer>
-      Mobile USB Play v0.3 · 데모 및 연결 점검용 · 실제 화면 미러링은 OpenDroid Remote 엔진 사용 · 사용자의 USB 권한 없이는 기기에 접근하지 않음.
+      Mobile USB Play v0.4 · 데모 및 연결 점검용 · 실제 화면 미러링은 OpenDroid Remote 엔진 사용 · 사용자의 USB 권한 없이는 기기에 접근하지 않음.
     </footer>
   </div>
   <script>
@@ -353,7 +355,7 @@
     }
     function profile() {
       const now=new Date().toISOString();
-      const base={schemaVersion:1,id:'profile-mobile-usb-fcm-starter-v03',name:'FC 모바일 초기 설정 (실기기 위치 보정 필요)',game:{title:'FC 모바일'},createdAt:now,updatedAt:now,reference:{orientation:'landscape',width:2400,height:1080},settings:{emergencyCode:'Escape',exclusiveInput:false,overlayOpacity:.88,mouseSensitivity:.0015},mappings:[]};
+      const base={schemaVersion:1,id:'profile-mobile-usb-fcm-starter-v04',name:'FC 모바일 시작용 (위치 보정 필요)',game:{title:'FC 모바일'},createdAt:now,updatedAt:now,reference:{orientation:'landscape',width:2400,height:1080},settings:{emergencyCode:'Escape',exclusiveInput:false,overlayOpacity:.88,mouseSensitivity:.0015},mappings:[]};
       for(const c of controls) {
         if(!c.enabled)continue;
         const map={id:'fc-'+c.id,name:c.label,enabled:true,position:{x:c.x/100,y:c.y/100},orientation:'landscape'};
@@ -363,10 +365,82 @@
       }
       return base;
     }
+    // v0.4: same-origin OpenDroid profile registration.
+    // The pinned OpenDroid engine stores profiles in IndexedDB:
+    // DB "opendroid-remote", object store "profiles", keyPath "id".
+    // We save only the user's mapping profile, never game account or USB details.
+    const installStatus=document.getElementById('fc-install-status');
+    const installButton=document.getElementById('fc-install');
+    const engineUrl=new URL('./engine/',window.location.href);
+    function putOpenDroidProfile(data) {
+      return new Promise((resolve,reject)=>{
+        if(!('indexedDB' in window)) {
+          reject(new Error('이 브라우저에는 IndexedDB가 없어. JSON 파일로 가져와.'));
+          return;
+        }
+        let request;
+        try { request=indexedDB.open('opendroid-remote'); }
+        catch(error){reject(error);return;}
+        request.onupgradeneeded=()=>{
+          const db=request.result;
+          if(!db.objectStoreNames.contains('profiles')) {
+            db.createObjectStore('profiles',{keyPath:'id'});
+          }
+        };
+        request.onerror=()=>reject(request.error||new Error('프로필 데이터베이스 열기 실패'));
+        request.onblocked=()=>reject(new Error('다른 탭에서 데이터베이스를 사용 중이야. 미러링 엔진 탭을 닫고 다시 시도해.'));
+        request.onsuccess=()=>{
+          const db=request.result;
+          if(!db.objectStoreNames.contains('profiles')) {
+            db.close();reject(new Error('현재 엔진의 프로필 저장 형식이 달라. JSON 가져오기를 사용해.'));return;
+          }
+          let tx;
+          try {
+            tx=db.transaction('profiles','readwrite');
+            const store=tx.objectStore('profiles');
+            // Reusing the stable ID updates this website's own profile only.
+            const read=store.get(data.id);
+            read.onsuccess=()=>{
+              if(read.result && typeof read.result.createdAt==='string') {
+                data.createdAt=read.result.createdAt;
+              }
+              store.put(data);
+            };
+            read.onerror=()=>{try{tx.abort()}catch(_){}};
+            tx.oncomplete=()=>{db.close();resolve()};
+            tx.onabort=()=>{db.close();reject(tx.error||new Error('프로필 저장 취소'))};
+            tx.onerror=()=>{};
+          } catch(error){db.close();reject(error)}
+        };
+      });
+    }
+    installButton.onclick=async()=>{
+      if(location.protocol!=='https:' && location.hostname!=='localhost' && location.hostname!=='127.0.0.1') {
+        installStatus.textContent='공개된 HTTPS 사이트에서 실행해야 해. 지금은 JSON 다운로드를 사용해.';
+        return;
+      }
+      if(engineUrl.origin!==location.origin) {
+        installStatus.textContent='같은 사이트에 설치된 미러링 엔진이 필요해.';
+        return;
+      }
+      installButton.disabled=true;
+      installStatus.textContent='미러링 엔진 존재 여부를 확인하고 있어…';
+      try {
+        const resp=await fetch(engineUrl.toString(),{method:'GET',cache:'no-store'});
+        if(!resp.ok)throw new Error('미러링 엔진이 아직 공개되지 않았어 (HTTP '+resp.status+').');
+        installStatus.textContent='FC 모바일 조작 프로필을 브라우저에 저장하고 있어…';
+        await putOpenDroidProfile(profile());
+        installStatus.textContent='저장 완료! 미러링 엔진으로 이동해. Profiles에서 FC 모바일 시작용을 선택해.';
+        window.location.assign(engineUrl.toString());
+      } catch(error){
+        installStatus.textContent='자동 저장에 실패했어: '+error.message+' · 아래 JSON 다운로드 → 엔진 Profiles → Import JSON으로 가져오면 돼.';
+        installButton.disabled=false;
+      }
+    };
     document.getElementById('fc-download').onclick=()=>{
       const data=JSON.stringify(profile(),null,2)+'\n';
       const url=URL.createObjectURL(new Blob([data],{type:'application/json'}));
-      const a=document.createElement('a');a.href=url;a.download='fc-mobile-starter-v03.json';a.click();
+      const a=document.createElement('a');a.href=url;a.download='fc-mobile-starter-v04.json';a.click();
       setTimeout(()=>URL.revokeObjectURL(url),1000);
       document.getElementById('message').textContent='FC 모바일 초기 프로필을 다운로드했어. 미러링 엔진의 Profiles → Import JSON으로 가져와.';
     };
