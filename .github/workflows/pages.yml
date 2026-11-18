@@ -1,0 +1,82 @@
+name: Deploy Mobile USB Play with Android mirroring
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Mobile USB Play
+        uses: actions/checkout@v4
+
+      - name: Checkout Android mirroring engine
+        uses: actions/checkout@v4
+        with:
+          repository: hihumanzone/opendroid_remote
+          ref: d2584432449373ca22f59f6ab192e10a509677e8
+          path: upstream
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies and build engine
+        working-directory: upstream
+        run: |
+          npm install
+          npm test
+          npm run typecheck
+          npm run build
+
+      - name: Assemble site
+        run: |
+          mkdir -p _site/engine
+          cp -a upstream/dist-static/. _site/engine/
+          cp upstream/LICENSE _site/engine/LICENSE
+          cp upstream/THIRD_PARTY_NOTICES.md _site/engine/THIRD_PARTY_NOTICES.md
+          cp index.html _site/index.html
+          python3 - <<'PY'
+          from pathlib import Path
+          f = Path('_site/index.html')
+          html = f.read_text(encoding='utf-8')
+          old = 'https://hihumanzone.github.io/opendroid_remote/'
+          if old not in html:
+              raise RuntimeError('Cannot locate the original engine link')
+          html = html.replace(old, './engine/')
+          html = html.replace('Mobile USB Play v0.1', 'Mobile USB Play v0.2')
+          f.write_text(html, encoding='utf-8')
+          assert Path('_site/engine/index.html').exists(), 'Engine build missing index.html'
+          PY
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
