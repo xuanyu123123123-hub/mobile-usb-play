@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Mobile USB Play v0.1</title>
+  <title>Mobile USB Play v0.3</title>
   <style>
     :root { color-scheme: dark; font-family: system-ui, "Malgun Gothic", sans-serif; }
     * { box-sizing: border-box; }
@@ -57,13 +57,28 @@
     .log { font-size: 12px; min-height: 43px; padding: 10px; border-radius: 8px; color: #9cdaff; background: #0d1626; }
     footer { margin: 22px 0 0; font-size: 12px; color: #93a5bf; line-height: 1.6; }
     @media (max-width: 810px) { .layout { grid-template-columns: 1fr; } .wrap { padding: 12px; } h1 { font-size: 21px; } }
+
+    .fc-panel{margin-top:20px;padding:16px;border:1px solid #40587a;border-radius:14px;background:#16283f}
+    .fc-head{display:flex;align-items:center;gap:9px;justify-content:space-between;flex-wrap:wrap}
+    .fc-help{font-size:12px;color:#c6d8ee;line-height:1.65;margin:8px 0}
+    .fc-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px}
+    .fc-item{padding:10px;border:1px solid #395170;background:#102036;border-radius:9px;font-size:12px}
+    .fc-item-header{display:flex;gap:8px;justify-content:space-between;align-items:center;font-weight:bold}
+    .fc-coords{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+    .fc-coords label{display:flex;align-items:center;gap:5px;min-width:0}
+    .fc-coords input{min-width:0;width:100%;background:#243d5b;border:1px solid #5c7795;border-radius:6px;padding:7px;color:white;font:inherit}
+    .fc-marker-layer{position:absolute;inset:0;z-index:3;pointer-events:none}
+    .fc-marker{position:absolute;transform:translate(-50%,-50%);pointer-events:auto;touch-action:none;user-select:none;background:#173f68e8;color:white;box-shadow:0 1px 10px #0008;border:2px solid #e0f2ff;border-radius:100px;font-size:11px;font-weight:850;padding:7px;cursor:grab}
+    .fc-marker:active{cursor:grabbing;background:#2862ae}
+    .fc-legend{margin-top:8px;font-size:11px;color:#a9bdd4}
+    @media(max-width:680px){.fc-list{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
   <div class="wrap">
     <header class="top">
       <div class="brand">🎮 MOBILE <span>USB PLAY</span></div>
-      <span class="tag">v0.1 · 브라우저 테스트 버전</span>
+      <span class="tag">v0.3 · FC 조작 프로필 편집기</span>
     </header>
     <div class="layout">
       <main class="card">
@@ -75,6 +90,7 @@
             <div class="goal left"></div><div class="goal right"></div>
             <div id="player" class="player"></div><div id="ball" class="ball"></div>
             <div class="hint">연습용 데모 · 실제 게임 화면 아님</div>
+            <div class="fc-marker-layer" id="fc-markers"></div>
             <div class="mode" id="mode">데모 정지</div>
           </div>
         </section>
@@ -87,6 +103,16 @@
         <p class="small">USB 기기 선택은 접근 권한과 기기 이름만 확인해. 여기서는 아직 ADB 인증·영상 전송·실제 스마트폰 조작을 하지 않아.</p>
         <h2 style="margin-top:23px">최근 동작</h2>
         <div class="log" id="action">아직 입력이 없어.</div>
+        <div class="fc-panel" id="fc-editor">
+          <div class="fc-head"><h2 style="margin:0">⚽ FC 모바일 조작 위치 편집</h2><span class="tag">비공식 초기 프로필</span></div>
+          <p class="fc-help">아래 버튼의 가상 터치 위치를 수정할 수 있어. 축구장 위의 동그라미를 드래그하거나 좌표를 바꾸면 돼. <strong>실제 FC 모바일 버튼 위치는 연결 후 확인해야 해.</strong> 기존 오른쪽의 키보드 설정이 이 프로필에 반영돼.</p>
+          <div class="fc-list" id="fc-list"></div>
+          <div class="controls">
+            <button class="btn primary" id="fc-download">⬇ OpenDroid용 FC 프로필 JSON 다운로드</button>
+            <button class="btn" id="fc-reset">조작 위치 초기화</button>
+          </div>
+          <div class="fc-legend">내보낸 JSON은 화면 조작을 자동 실행하지 않아. /engine/ → Profiles → Import JSON에서 가져온 뒤 Play 모드에서 직접 사용해.</div>
+        </div>
       </main>
       <aside class="right">
         <section class="card">
@@ -121,7 +147,7 @@
       </aside>
     </div>
     <footer>
-      Mobile USB Play v0.1 · 데모 및 연결 점검용 · 실제 화면 미러링은 OpenDroid Remote 엔진 사용 · 사용자의 USB 권한 없이는 기기에 접근하지 않음.
+      Mobile USB Play v0.3 · 데모 및 연결 점검용 · 실제 화면 미러링은 OpenDroid Remote 엔진 사용 · 사용자의 USB 권한 없이는 기기에 접근하지 않음.
     </footer>
   </div>
   <script>
@@ -253,6 +279,100 @@
     window.addEventListener('keyup',e=>active.delete(e.code));
     window.addEventListener('blur',()=>active.clear());
     drawKeys(); checkFeatures();
+  </script>
+<script>
+  // v0.3: OpenDroid Profile Schema v1-compatible starter-profile editor.
+  // These positions are approximate placeholders, not measured FC Mobile coordinates.
+  (() => {
+    const ctl = [
+      {id:'move',label:'이동 조이스틱',type:'joystick',x:14,y:78,enabled:true},
+      {id:'pass',label:'패스 (J)',type:'tap',x:81,y:83,enabled:true},
+      {id:'shot',label:'슛 (K)',type:'tap',x:92,y:69,enabled:true},
+      {id:'through',label:'스루패스 (L)',type:'tap',x:80,y:65,enabled:true},
+      {id:'sprint',label:'달리기 (Shift)',type:'hold',x:92,y:87,enabled:true}
+    ];
+    const stateKey='mobile-usb-play-fc-profile-v03';
+    let controls=ctl.map(v=>({...v}));
+    try {
+      const saved=JSON.parse(localStorage.getItem(stateKey)||'null');
+      if(Array.isArray(saved)) for (const c of controls) {
+        const prev=saved.find(v=>v?.id===c.id);
+        if(prev && Number.isFinite(prev.x) && Number.isFinite(prev.y)) {
+          c.x=Math.max(0,Math.min(100,prev.x));
+          c.y=Math.max(0,Math.min(100,prev.y));
+          c.enabled=!!prev.enabled;
+        }
+      }
+    } catch (_) {}
+    const list=document.getElementById('fc-list');
+    const layer=document.getElementById('fc-markers');
+    const pitch=document.getElementById('pitch');
+    const saveControls=()=>{try{localStorage.setItem(stateKey,JSON.stringify(controls))}catch(_){}};
+    const round=v=>Math.round(v*10)/10;
+    function render() {
+      list.replaceChildren();layer.replaceChildren();
+      for(const c of controls) {
+        const cell=document.createElement('div');cell.className='fc-item';
+        const top=document.createElement('div');top.className='fc-item-header';
+        const name=document.createElement('span');name.textContent=c.label;
+        const enabled=document.createElement('input');enabled.type='checkbox';enabled.checked=c.enabled;
+        enabled.title='프로필에 포함';enabled.setAttribute('aria-label',c.label+' 활성화');
+        enabled.onchange=()=>{c.enabled=enabled.checked;saveControls();render()};
+        top.append(name,enabled);
+        const coords=document.createElement('div');coords.className='fc-coords';
+        for(const axis of ['x','y']) {
+          const label=document.createElement('label');label.textContent=axis.toUpperCase()+' %';
+          const n=document.createElement('input');n.type='number';n.min=0;n.max=100;n.step=.1;n.value=String(c[axis]);
+          n.setAttribute('aria-label',c.label+' '+axis+' 퍼센트');
+          n.onchange=()=>{if(Number.isFinite(n.valueAsNumber))c[axis]=round(Math.min(100,Math.max(0,n.valueAsNumber)));saveControls();render()};
+          label.append(n);coords.append(label);
+        }
+        cell.append(top,coords);list.append(cell);
+        if(c.enabled) {
+          const dot=document.createElement('button');dot.className='fc-marker';dot.type='button';
+          dot.textContent=c.id==='move'?'WASD':({pass:'J',shot:'K',through:'L',sprint:'Shift'}[c.id]||c.id);
+          dot.title=c.label+' — 드래그해서 위치 조절';
+          dot.style.left=c.x+'%';dot.style.top=c.y+'%';
+          dot.onpointerdown=ev=>{
+            ev.preventDefault();ev.stopPropagation();
+            dot.setPointerCapture(ev.pointerId);
+            const update=e=>{
+              const r=pitch.getBoundingClientRect();
+              c.x=round(Math.max(0,Math.min(100,(e.clientX-r.left)/r.width*100)));
+              c.y=round(Math.max(0,Math.min(100,(e.clientY-r.top)/r.height*100)));
+              dot.style.left=c.x+'%';dot.style.top=c.y+'%';
+            };
+            update(ev);
+            dot.onpointermove=update;
+            dot.onpointerup=()=>{dot.onpointermove=null;dot.onpointerup=null;saveControls();render()};
+            dot.onpointercancel=()=>{dot.onpointermove=null;dot.onpointerup=null;saveControls();render()};
+          };
+          layer.append(dot);
+        }
+      }
+    }
+    function profile() {
+      const now=new Date().toISOString();
+      const base={schemaVersion:1,id:'profile-mobile-usb-fcm-starter-v03',name:'FC 모바일 초기 설정 (실기기 위치 보정 필요)',game:{title:'FC 모바일'},createdAt:now,updatedAt:now,reference:{orientation:'landscape',width:2400,height:1080},settings:{emergencyCode:'Escape',exclusiveInput:false,overlayOpacity:.88,mouseSensitivity:.0015},mappings:[]};
+      for(const c of controls) {
+        if(!c.enabled)continue;
+        const map={id:'fc-'+c.id,name:c.label,enabled:true,position:{x:c.x/100,y:c.y/100},orientation:'landscape'};
+        if(c.type==='joystick')base.mappings.push({...map,type:'joystick',keys:{up:settings.keys.up,down:settings.keys.down,left:settings.keys.left,right:settings.keys.right},radius:.09,smoothing:.25});
+        else if(c.type==='tap')base.mappings.push({...map,type:'tap',trigger:{kind:'key',code:settings.keys[c.id]},durationMs:55});
+        else if(c.type==='hold')base.mappings.push({...map,type:'hold',trigger:{kind:'key',code:settings.keys[c.id]}});
+      }
+      return base;
+    }
+    document.getElementById('fc-download').onclick=()=>{
+      const data=JSON.stringify(profile(),null,2)+'\n';
+      const url=URL.createObjectURL(new Blob([data],{type:'application/json'}));
+      const a=document.createElement('a');a.href=url;a.download='fc-mobile-starter-v03.json';a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+      document.getElementById('message').textContent='FC 모바일 초기 프로필을 다운로드했어. 미러링 엔진의 Profiles → Import JSON으로 가져와.';
+    };
+    document.getElementById('fc-reset').onclick=()=>{controls=ctl.map(v=>({...v}));saveControls();render()};
+    render();
+  })();
   </script>
 </body>
 </html>
